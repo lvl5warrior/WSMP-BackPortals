@@ -1,0 +1,17 @@
+name: WSMP-WorldTP
+version: '1.0.0'
+main: com.warriorssmp.worldtp.WorldTpPlugin
+api-version: '26.2'
+author: WarriorsSMP
+description: A minimal /wtp command that teleports directly to a world's configured Multiverse spawn using a plain synchronous teleport, bypassing Multiverse-Core's own (currently broken) async cross-world teleport entirely.
+
+commands:
+  wtp:
+    description: Teleport directly to a world's spawn, bypassing Multiverse's async teleporter
+    usage: /wtp <world>
+    permission: wsmpworldtp.use
+
+permissions:
+  wsmpworldtp.use:
+    description: Access to /wtp
+    default: op

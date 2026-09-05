@@ -70,23 +70,27 @@ public class WorldTpCommand implements CommandExecutor {
                 + " | source=" + resolved.source() + " target=" + formatLoc(destination)
                 + " | before=" + formatLoc(before));
 
-        CompletableFuture<Boolean> future = player.teleportAsync(destination,
-                PlayerTeleportEvent.TeleportCause.PLUGIN);
+        // CRITICAL FIX: every successful cross-world teleport we've observed on this
+        // server (Multiverse-Portal walkthroughs, WSMP-Duels' post-death return) was
+        // triggered from inside an event handler during normal tick processing.
+        // Every failure has been triggered directly from a player command - including
+        // every previous version of this very method. Scheduling the actual
+        // teleportAsync() call via runTask() moves it out of the command-dispatch
+        // context and into a normal tick, matching every case that's worked so far.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            CompletableFuture<Boolean> future = player.teleportAsync(destination,
+                    PlayerTeleportEvent.TeleportCause.PLUGIN);
 
-        // CRITICAL: never call future.get()/.join() here - this method runs on the
-        // main server thread (commands do), and teleportAsync()'s future can only
-        // complete by scheduling its continuation back onto that same main thread.
-        // Blocking here would deadlock the whole server waiting on a future that
-        // can never finish. An earlier version of this file did exactly that and
-        // froze the server for 15+ seconds, triggering the watchdog. Everything
-        // below runs later, via callback, once Paper actually completes the future.
-        future.thenAccept(result -> handleTeleportResult(sender, player, destination, result, null))
-                .exceptionally(ex -> {
-                    Throwable cause = ex instanceof java.util.concurrent.CompletionException && ex.getCause() != null
-                            ? ex.getCause() : ex;
-                    handleTeleportResult(sender, player, destination, false, cause);
-                    return null;
-                });
+            // Still never block on this future - see the comment history below for
+            // why. Scheduling the call itself is the fix; this part was already safe.
+            future.thenAccept(result -> handleTeleportResult(sender, player, destination, result, null))
+                    .exceptionally(ex -> {
+                        Throwable cause = ex instanceof java.util.concurrent.CompletionException && ex.getCause() != null
+                                ? ex.getCause() : ex;
+                        handleTeleportResult(sender, player, destination, false, cause);
+                        return null;
+                    });
+        });
 
         return true;
     }
